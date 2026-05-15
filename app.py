@@ -1,0 +1,31 @@
+from flask import Flask, request, jsonify
+import requests
+
+app = Flask(__name__)
+
+def check_page_has_likes(uid):
+    url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
+    try:
+        res = requests.get(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }, timeout=10)
+        has_likes = "friends_likes" in res.text or "lượt thích" in res.text
+        return {"uid": uid, "has_likes": has_likes}
+    except Exception as e:
+        return {"uid": uid, "error": str(e)}
+
+@app.route("/check")
+def check():
+    uid = request.args.get("uid", "")
+    if not uid:
+        return jsonify({"error": "Thiếu uid"}), 400
+    return jsonify(check_page_has_likes(uid))
+
+@app.route("/check-bulk", methods=["POST"])
+def check_bulk():
+    uids = request.json.get("uids", [])
+    results = [check_page_has_likes(uid) for uid in uids]
+    return jsonify(results)
+
+if __name__ == "__main__":
+    app.run()
