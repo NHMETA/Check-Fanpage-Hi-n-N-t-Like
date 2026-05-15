@@ -4,16 +4,20 @@ import re
 
 app = Flask(__name__, static_folder='.')
 
+ACCESS_TOKEN = "EAAVi5UFSu9cBRQMkbZBqo8ZBdAeOojyP7ZAS0qUtZCNnLE1rCqh5rdMKC5ZAWcSSEIOOYdyhZBWWSnI9MJNpDRkgwf6XNcm9GBzjxozeetYMIsYZAQqbSrJ2UGG6BPJ1n0PPMi0nHaGUdICd81wZBG5bHYMtRHnz3vrj9g3MiGMmHjJtFWHFm0Lv2oK5V3xQPxtANZCmnmDNhALkML43805uiHsnqY6H9tzJg4F8WW5hn9BApfILZAnzra5zwzygz20QetWZAHbmx42evoKCcZBX2eBLl8TA2mnDnuNsQ53CZA3xP0P0uMHhqLjZCk6XlXBUZBZBS510F8VL13LJApTNh4iT0BssxQHNGwZDZD"
+
 def check_page_has_likes(uid):
-    url = f"https://www.facebook.com/profile.php?id={uid}"
+    url = f"https://graph.facebook.com/{uid}"
     try:
-        res = requests.get(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "vi-VN,vi;q=0.9"
+        res = requests.get(url, params={
+            "fields": "fan_count,name",
+            "access_token": ACCESS_TOKEN
         }, timeout=10)
-        text = res.text
-        has_likes = "lượt thích" in text and "người theo dõi" in text
-        return {"uid": uid, "has_likes": has_likes}
+        data = res.json()
+        if "error" in data:
+            return {"uid": uid, "has_likes": False, "error": data["error"]["message"]}
+        fan_count = data.get("fan_count", 0)
+        return {"uid": uid, "has_likes": fan_count > 0, "fan_count": fan_count, "name": data.get("name", "")}
     except Exception as e:
         return {"uid": uid, "error": str(e)}
 
@@ -28,25 +32,4 @@ def check():
         return jsonify({"error": "Thiếu uid"}), 400
     return jsonify(check_page_has_likes(uid))
 
-@app.route("/check-bulk", methods=["POST"])
-def check_bulk():
-    uids = request.json.get("uids", [])
-    results = [check_page_has_likes(uid) for uid in uids]
-    return jsonify(results)
-
-@app.route("/get-uid", methods=["POST"])
-def get_uid():
-    link = request.json.get("link", "")
-    uid = extract_uid_from_link(link)
-    if uid:
-        return jsonify({"uid": uid})
-    return jsonify({"error": "Không tìm thấy UID"}), 400
-
-def extract_uid_from_link(link):
-    match = re.search(r'id=(\d+)', link)
-    if match:
-        return match.group(1)
-    return None
-
-if __name__ == "__main__":
-    app.run()
+@app.route("/check-bulk", methods=["P
