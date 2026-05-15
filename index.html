@@ -1,415 +1,61 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FB Page Likes Checker</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0a0a0a;
-    --surface: #111111;
-    --border: #222222;
-    --border2: #2a2a2a;
-    --text: #e8e8e8;
-    --muted: #666;
-    --accent: #00e5a0;
-    --accent-dim: rgba(0,229,160,0.08);
-    --red: #ff4d4d;
-    --red-dim: rgba(255,77,77,0.08);
-    --yellow: #ffd166;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    min-height: 100vh;
-    padding: 40px 20px;
-  }
-  .wrap { max-width: 760px; margin: 0 auto; }
+from flask import Flask, request, jsonify, send_from_directory
+import requests
+import re
 
-  header { margin-bottom: 40px; }
-  .logo {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 10px;
-  }
-  h1 {
-    font-size: 28px;
-    font-weight: 300;
-    letter-spacing: -0.02em;
-    color: var(--text);
-    line-height: 1.2;
-  }
-  h1 span { color: var(--accent); font-weight: 500; }
-  .subtitle { color: var(--muted); font-size: 13px; margin-top: 6px; }
+app = Flask(__name__, static_folder='.')
 
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 16px;
-  }
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-  label {
-    display: block;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
+def check_page_has_likes(uid):
+    url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        has_likes = "friends_likes" in res.text or "lượt thích" in res.text
+        return {"uid": uid, "has_likes": has_likes}
+    except Exception as e:
+        return {"uid": uid, "error": str(e)}
 
-  textarea {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border2);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    padding: 12px;
-    resize: vertical;
-    min-height: 120px;
-    outline: none;
-    transition: border-color 0.2s;
-    line-height: 1.6;
-  }
-  textarea:focus { border-color: var(--accent); }
-  textarea::placeholder { color: #333; }
+def get_uid_from_username(username):
+    url = f"https://www.facebook.com/{username}"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        # Tìm UID trong HTML
+        m = re.search(r'"userID":"(\d+)"', res.text)
+        if m: return m.group(1)
+        m = re.search(r'profile_id=(\d+)', res.text)
+        if m: return m.group(1)
+        m = re.search(r'"id":"(\d+)"', res.text)
+        if m: return m.group(1)
+        return None
+    except:
+        return None
 
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+@app.route("/")
+def index():
+    return send_from_directory('.', 'index.html')
 
-  .actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
+@app.route("/check")
+def check():
+    uid = request.args.get("uid", "")
+    if not uid:
+        return jsonify({"error": "Thiếu uid"}), 400
+    return jsonify(check_page_has_likes(uid))
 
-  button {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 20px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #000;
-  }
-  .btn-primary:hover { background: #00ffb3; }
-  .btn-primary:disabled { background: #1a3d30; color: #2a6a50; cursor: not-allowed; }
-  .btn-ghost {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border2);
-  }
-  .btn-ghost:hover { color: var(--text); border-color: #444; }
+@app.route("/check-bulk", methods=["POST"])
+def check_bulk():
+    uids = request.json.get("uids", [])
+    results = [check_page_has_likes(uid) for uid in uids]
+    return jsonify(results)
 
-  .progress-bar {
-    height: 2px;
-    background: var(--border);
-    border-radius: 2px;
-    margin-top: 16px;
-    overflow: hidden;
-    display: none;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.3s;
-    width: 0%;
-  }
+@app.route("/get-uid")
+def get_uid():
+    username = request.args.get("username", "").strip()
+    if not username:
+        return jsonify({"error": "Thiếu username"}), 400
+    uid = get_uid_from_username(username)
+    if uid:
+        return jsonify({"username": username, "uid": uid})
+    return jsonify({"username": username, "uid": None, "error": "Không tìm thấy UID"})
 
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 16px;
-    display: none;
-  }
-  .stat {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px;
-    text-align: center;
-  }
-  .stat-num {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 22px;
-    font-weight: 600;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-  .stat-num.green { color: var(--accent); }
-  .stat-num.red { color: var(--red); }
-  .stat-num.yellow { color: var(--yellow); }
-
-  .results { display: none; }
-  .result-header {
-    display: grid;
-    grid-template-columns: 1fr 160px 100px;
-    gap: 12px;
-    padding: 8px 14px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    text-transform: uppercase;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 4px;
-  }
-  .result-item {
-    display: grid;
-    grid-template-columns: 1fr 160px 100px;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 6px;
-    margin-bottom: 3px;
-    align-items: center;
-    transition: background 0.1s;
-    animation: fadeIn 0.2s ease;
-  }
-  .result-item:hover { background: #151515; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-  .uid-link {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    color: var(--text);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .uid-link:hover { color: var(--accent); }
-  .uid-link .icon { font-size: 10px; opacity: 0.4; }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 4px;
-    letter-spacing: 0.05em;
-  }
-  .badge-likes { background: var(--accent-dim); color: var(--accent); }
-  .badge-followers { background: var(--red-dim); color: var(--red); }
-  .badge-error { background: rgba(255,209,102,0.08); color: var(--yellow); }
-  .badge-loading {
-    background: rgba(255,255,255,0.04);
-    color: var(--muted);
-    animation: pulse 1s infinite;
-  }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-  .dot-green { background: var(--accent); }
-  .dot-red { background: var(--red); }
-
-  .export-row { margin-top: 14px; display: none; justify-content: flex-end; gap: 8px; }
-
-  .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="logo">FB Tool</div>
-    <h1>Page <span>Likes</span> Checker</h1>
-    <p class="subtitle">Kiểm tra fanpage nào hiện lượt thích — hàng loạt, không cần token</p>
-  </header>
-
-  <div class="card">
-    <label>Danh sách UID (mỗi dòng 1 UID)</label>
-    <textarea id="uidInput" placeholder="100095080001436&#10;61574841692449&#10;123456789&#10;..."></textarea>
-    <p class="hint">Dán thoải mái, tool tự bỏ dòng trống và trùng lặp.</p>
-    <div class="actions">
-      <button class="btn-primary" id="checkBtn" onclick="startCheck()">▶ Bắt đầu check</button>
-      <button class="btn-ghost" onclick="clearAll()">Xóa</button>
-      <span id="statusText" style="font-size:12px; color:var(--muted); margin-left:auto;"></span>
-    </div>
-    <div class="progress-bar" id="progressBar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-  </div>
-
-  <div class="stats" id="statsRow">
-    <div class="stat"><div class="stat-num" id="totalNum">0</div><div class="stat-label">Tổng</div></div>
-    <div class="stat"><div class="stat-num green" id="likesNum">0</div><div class="stat-label">Có lượt thích</div></div>
-    <div class="stat"><div class="stat-num red" id="noLikesNum">0</div><div class="stat-label">Chỉ followers</div></div>
-  </div>
-
-  <div class="results" id="resultsBox">
-    <div class="result-header">
-      <div>Page UID</div>
-      <div>Trạng thái</div>
-      <div>Kết quả</div>
-    </div>
-    <div id="resultsList"></div>
-  </div>
-
-  <div class="export-row" id="exportRow">
-    <button class="btn-ghost" onclick="exportCSV()">↓ Xuất CSV</button>
-    <button class="btn-ghost" onclick="copyLikes()">Copy UID có likes</button>
-  </div>
-</div>
-
-<script>
-const API = 'https://check-fanpage-hi-n-n-t-like.onrender.com';
-let results = [];
-let running = false;
-
-function parseUIDs(text) {
-  return [...new Set(
-    text.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-  )];
-}
-
-async function startCheck() {
-  if (running) return;
-  const uids = parseUIDs(document.getElementById('uidInput').value);
-  if (!uids.length) { alert('Nhập ít nhất 1 UID!'); return; }
-
-  running = true;
-  results = [];
-  document.getElementById('checkBtn').disabled = true;
-  document.getElementById('progressBar').style.display = 'block';
-  document.getElementById('statsRow').style.display = 'grid';
-  document.getElementById('resultsBox').style.display = 'block';
-  document.getElementById('exportRow').style.display = 'none';
-  document.getElementById('resultsList').innerHTML = '';
-
-  updateStats();
-
-  let done = 0;
-  const total = uids.length;
-  document.getElementById('totalNum').textContent = total;
-
-  // Thêm placeholder loading cho tất cả
-  for (const uid of uids) {
-    addRow(uid, 'loading');
-  }
-
-  // Check từng cái, 3 cái song song
-  const chunks = [];
-  for (let i = 0; i < uids.length; i += 3) chunks.push(uids.slice(i, i+3));
-
-  for (const chunk of chunks) {
-    await Promise.all(chunk.map(async uid => {
-      try {
-        const res = await fetch(`${API}/check?uid=${uid}`);
-        const data = await res.json();
-        const r = { uid, has_likes: data.has_likes, error: !!data.error };
-        results.push(r);
-        updateRow(uid, r);
-      } catch(e) {
-        const r = { uid, has_likes: false, error: true };
-        results.push(r);
-        updateRow(uid, r);
-      }
-      done++;
-      document.getElementById('progressFill').style.width = (done/total*100) + '%';
-      document.getElementById('statusText').textContent = `${done}/${total}`;
-      updateStats();
-    }));
-  }
-
-  running = false;
-  document.getElementById('checkBtn').disabled = false;
-  document.getElementById('statusText').textContent = `Xong ${total} page`;
-  document.getElementById('exportRow').style.display = 'flex';
-}
-
-function addRow(uid, state) {
-  const list = document.getElementById('resultsList');
-  const div = document.createElement('div');
-  div.className = 'result-item';
-  div.id = `row-${uid}`;
-  div.innerHTML = `
-    <a href="https://facebook.com/profile.php?id=${uid}" target="_blank" class="uid-link">
-      ${uid} <span class="icon">↗</span>
-    </a>
-    <span class="badge badge-loading">Đang check...</span>
-    <span style="color:var(--muted); font-size:12px;">—</span>
-  `;
-  list.appendChild(div);
-}
-
-function updateRow(uid, r) {
-  const row = document.getElementById(`row-${uid}`);
-  if (!row) return;
-  if (r.error) {
-    row.children[1].outerHTML = `<span class="badge badge-error">⚠ Lỗi</span>`;
-    row.children[2].outerHTML = `<span style="color:var(--muted); font-size:12px;">—</span>`;
-  } else if (r.has_likes) {
-    row.innerHTML = `
-      <a href="https://facebook.com/profile.php?id=${uid}" target="_blank" class="uid-link">
-        ${uid} <span class="icon">↗</span>
-      </a>
-      <span class="badge badge-likes"><span class="dot dot-green"></span>Có lượt thích</span>
-      <span style="color:var(--accent); font-size:12px; font-family:'IBM Plex Mono',monospace;">✓</span>
-    `;
-  } else {
-    row.innerHTML = `
-      <a href="https://facebook.com/profile.php?id=${uid}" target="_blank" class="uid-link">
-        ${uid} <span class="icon">↗</span>
-      </a>
-      <span class="badge badge-followers"><span class="dot dot-red"></span>Chỉ followers</span>
-      <span style="color:var(--red); font-size:12px; font-family:'IBM Plex Mono',monospace;">✗</span>
-    `;
-  }
-}
-
-function updateStats() {
-  const likes = results.filter(r => r.has_likes).length;
-  const noLikes = results.filter(r => !r.has_likes && !r.error).length;
-  document.getElementById('likesNum').textContent = likes;
-  document.getElementById('noLikesNum').textContent = noLikes;
-}
-
-function clearAll() {
-  document.getElementById('uidInput').value = '';
-  document.getElementById('resultsList').innerHTML = '';
-  document.getElementById('resultsBox').style.display = 'none';
-  document.getElementById('statsRow').style.display = 'none';
-  document.getElementById('progressBar').style.display = 'none';
-  document.getElementById('exportRow').style.display = 'none';
-  document.getElementById('statusText').textContent = '';
-  results = [];
-}
-
-function exportCSV() {
-  const rows = [['UID', 'Co_luot_thich', 'Loi']];
-  for (const r of results) rows.push([r.uid, r.has_likes ? 'Co' : 'Khong', r.error ? 'Co' : '']);
-  const csv = rows.map(r => r.join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'fb_likes_check.csv';
-  a.click();
-}
-
-function copyLikes() {
-  const uids = results.filter(r => r.has_likes).map(r => r.uid).join('\n');
-  navigator.clipboard.writeText(uids).then(() => alert('Đã copy ' + results.filter(r=>r.has_likes).length + ' UID có likes!'));
-}
-</script>
-</body>
-</html>
+if __name__ == "__main__":
+    app.run()
