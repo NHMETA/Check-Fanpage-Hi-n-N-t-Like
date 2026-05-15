@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import requests
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 
 def check_page_has_likes(uid):
     url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
@@ -13,6 +14,10 @@ def check_page_has_likes(uid):
         return {"uid": uid, "has_likes": has_likes}
     except Exception as e:
         return {"uid": uid, "error": str(e)}
+
+@app.route("/")
+def index():
+    return send_from_directory('.', 'index.html')
 
 @app.route("/check")
 def check():
