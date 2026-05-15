@@ -32,4 +32,25 @@ def check():
         return jsonify({"error": "Thiếu uid"}), 400
     return jsonify(check_page_has_likes(uid))
 
-@app.route("/check-bulk", methods=["P
+@app.route("/check-bulk", methods=["POST"])
+def check_bulk():
+    uids = request.json.get("uids", [])
+    results = [check_page_has_likes(uid) for uid in uids]
+    return jsonify(results)
+
+@app.route("/get-uid", methods=["POST"])
+def get_uid():
+    link = request.json.get("link", "")
+    uid = extract_uid_from_link(link)
+    if uid:
+        return jsonify({"uid": uid})
+    return jsonify({"error": "Không tìm thấy UID"}), 400
+
+def extract_uid_from_link(link):
+    match = re.search(r'id=(\d+)', link)
+    if match:
+        return match.group(1)
+    return None
+
+if __name__ == "__main__":
+    app.run()
