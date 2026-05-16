@@ -15,11 +15,6 @@
   h1{font-size:26px;font-weight:300;letter-spacing:-.02em}
   h1 span{color:var(--accent);font-weight:500}
   .subtitle{color:var(--muted);font-size:13px;margin-top:5px}
-  .token-bar{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:16px;display:flex;gap:10px;align-items:center}
-  .token-bar input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 12px;outline:none;transition:border-color .2s}
-  .token-bar input:focus{border-color:var(--accent)}
-  .token-bar input::placeholder{color:#333}
-  .token-status{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:nowrap}
   .tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border)}
   .tab{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:10px 16px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
   .tab:hover{color:var(--text)}
@@ -52,10 +47,10 @@
   .snum.g{color:var(--accent)}.snum.r{color:var(--red)}.snum.b{color:var(--blue)}
   .res-box{display:none}
   .res-hdr{display:grid;gap:10px;padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px}
-  .rh1{grid-template-columns:1fr 180px 70px}
+  .rh1{grid-template-columns:1fr 160px 70px}
   .rh2{grid-template-columns:1fr 160px 60px}
   .ri{display:grid;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:3px;align-items:center;transition:background .1s;animation:fi .2s ease}
-  .ri1{grid-template-columns:1fr 180px 70px}
+  .ri1{grid-template-columns:1fr 160px 70px}
   .ri2{grid-template-columns:1fr 160px 60px}
   .ri:hover{background:#151515}
   @keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -82,14 +77,8 @@
   <header>
     <div class="logo">FB Tool</div>
     <h1>Page <span>Likes</span> Checker</h1>
-    <p class="subtitle">Kiểm tra fanpage chính xác qua Graph API</p>
+    <p class="subtitle">Kiểm tra fanpage có hiện lượt thích hay không — không cần token</p>
   </header>
-
-  <div class="token-bar">
-    <input type="password" id="tokenInput" placeholder="Dán Access Token vào đây..." oninput="checkToken()">
-    <button class="btn-g" onclick="document.getElementById('tokenInput').value='';checkToken()">Xóa</button>
-    <span class="token-status" id="tokenStatus" style="color:var(--muted)">Chưa có token</span>
-  </div>
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('check',this)">✦ Check Likes</button>
@@ -115,7 +104,7 @@
       <div class="stat"><div class="snum r" id="noLikesNum">0</div><div class="slbl">Chỉ followers</div></div>
     </div>
     <div class="res-box" id="resBox">
-      <div class="res-hdr rh1"><div>Page UID / Tên</div><div>Trạng thái</div><div>Kết quả</div></div>
+      <div class="res-hdr rh1"><div>Page UID</div><div>Trạng thái</div><div>Kết quả</div></div>
       <div id="resList"></div>
     </div>
     <div class="erow" id="erow">
@@ -128,7 +117,7 @@
   <div class="tab-content" id="tab-uid">
     <div class="card">
       <label>Danh sách link hoặc username</label>
-      <textarea id="linkInput" placeholder="https://facebook.com/profile.php?id=61574841692449&#10;https://facebook.com/zuck&#10;fanpagename&#10;..."></textarea>
+      <textarea id="linkInput" placeholder="https://facebook.com/profile.php?id=61574841692449&#10;https://facebook.com/pagename&#10;..."></textarea>
       <p class="hint">Hỗ trợ link có id=, username, hoặc link thường.</p>
       <div class="actions">
         <button class="btn-b" id="uidBtn" onclick="startGetUID()">⟳ Lấy UID</button>
@@ -158,21 +147,6 @@
 const API = 'https://check-fanpage-hi-n-n-t-like.onrender.com';
 let results=[], uidResults=[], running=false;
 
-function getToken(){ return document.getElementById('tokenInput').value.trim(); }
-
-function checkToken(){
-  const t = getToken();
-  const el = document.getElementById('tokenStatus');
-  if(!t){ el.textContent='Chưa có token'; el.style.color='var(--muted)'; return; }
-  if(t.startsWith('EAA') && t.length > 50){
-    el.textContent='✓ Token hợp lệ — sẵn sàng check';
-    el.style.color='var(--accent)';
-  } else {
-    el.textContent='⚠ Token có vẻ sai';
-    el.style.color='var(--yellow)';
-  }
-}
-
 function switchTab(name,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -182,11 +156,8 @@ function switchTab(name,el){
 
 function parseLines(t){ return [...new Set(t.split('\n').map(l=>l.trim()).filter(Boolean))]; }
 
-// ===== CHECK LIKES =====
 async function startCheck(){
   if(running) return;
-  const token = getToken();
-  if(!token){ alert('Vui lòng nhập Access Token!'); return; }
   const uids = parseLines(document.getElementById('uidInput').value);
   if(!uids.length){ alert('Nhập ít nhất 1 UID!'); return; }
   running=true; results=[];
@@ -197,22 +168,22 @@ async function startCheck(){
   document.getElementById('erow').style.display='none';
   document.getElementById('resList').innerHTML='';
   document.getElementById('totalNum').textContent=uids.length;
-  updateCStats();
   for(const uid of uids) addCRow(uid);
   let done=0;
-  for(let i=0;i<uids.length;i+=5){
-    await Promise.all(uids.slice(i,i+5).map(async uid=>{
+  for(let i=0;i<uids.length;i+=3){
+    await Promise.all(uids.slice(i,i+3).map(async uid=>{
       let r;
       try{
-        const res=await fetch(`${API}/check?uid=${uid}&token=${encodeURIComponent(token)}`);
+        const res=await fetch(`${API}/check?uid=${uid}`);
         const d=await res.json();
-        r={uid,name:d.name||'',has_likes:d.has_likes,fan_count:d.fan_count,error:!!d.error,errmsg:d.error};
+        r={uid,has_likes:d.has_likes,error:!!d.error,errmsg:d.error};
       }catch(e){ r={uid,has_likes:false,error:true,errmsg:e.message}; }
       results.push(r); updateCRow(uid,r);
       done++;
       document.getElementById('pfill').style.width=(done/uids.length*100)+'%';
       document.getElementById('statusText').textContent=`${done}/${uids.length}`;
-      updateCStats();
+      document.getElementById('likesNum').textContent=results.filter(r=>r.has_likes).length;
+      document.getElementById('noLikesNum').textContent=results.filter(r=>!r.has_likes&&!r.error).length;
     }));
   }
   running=false;
@@ -230,16 +201,10 @@ function addCRow(uid){
 
 function updateCRow(uid,r){
   const row=document.getElementById('cr-'+uid); if(!row) return;
-  const label=r.name?`${uid} · <span style="color:var(--muted);font-size:11px">${r.name}</span>`:uid;
-  const link=`<a href="https://facebook.com/profile.php?id=${uid}" target="_blank" class="uid-link"><span>${uid}${r.name?' · '+r.name:''}</span><span class="ic">↗</span></a>`;
-  if(r.error) row.innerHTML=`${link}<span class="badge be">⚠ ${r.errmsg||'Lỗi'}</span><span style="color:var(--muted)">—</span>`;
-  else if(r.has_likes) row.innerHTML=`${link}<span class="badge bl"><span class="dot dg"></span>Có lượt thích${r.fan_count!=null?' · '+r.fan_count.toLocaleString():''}</span><span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:12px">✓</span>`;
-  else row.innerHTML=`${link}<span class="badge bf"><span class="dot dr"></span>Chỉ followers</span><span style="color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:12px">✗</span>`;
-}
-
-function updateCStats(){
-  document.getElementById('likesNum').textContent=results.filter(r=>r.has_likes).length;
-  document.getElementById('noLikesNum').textContent=results.filter(r=>!r.has_likes&&!r.error).length;
+  const link=`<a href="https://facebook.com/profile.php?id=${uid}" target="_blank" class="uid-link"><span>${uid}</span><span class="ic">↗</span></a>`;
+  if(r.error) row.innerHTML=`${link}<span class="badge be">⚠ Lỗi</span><span style="color:var(--muted)">—</span>`;
+  else if(r.has_likes) row.innerHTML=`${link}<span class="badge bl"><span class="dot dg"></span>Có lượt thích</span><span style="color:var(--accent);font-family:'IBM Plex Mono',monospace">✓</span>`;
+  else row.innerHTML=`${link}<span class="badge bf"><span class="dot dr"></span>Chỉ followers</span><span style="color:var(--red);font-family:'IBM Plex Mono',monospace">✗</span>`;
 }
 
 function clearCheck(){
@@ -252,7 +217,7 @@ function clearCheck(){
 }
 
 function exportCSV(){
-  const rows=[['UID','Ten','Co_likes','Fan_count','Loi'],...results.map(r=>[r.uid,'"'+(r.name||'')+'"',r.has_likes?'Co':'Khong',r.fan_count||'',r.error?'Co':''])];
+  const rows=[['UID','Co_likes','Loi'],...results.map(r=>[r.uid,r.has_likes?'Co':'Khong',r.error?'Co':''])];
   const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n')); a.download='fb_likes.csv'; a.click();
 }
 
@@ -261,7 +226,6 @@ function copyLikes(){
     .then(()=>alert('Đã copy '+results.filter(r=>r.has_likes).length+' UID!'));
 }
 
-// ===== LINK → UID =====
 function extractUID(raw){
   const m1=raw.match(/[?&]id=(\d+)/); if(m1) return {uid:m1[1],needLookup:false};
   const m2=raw.match(/\/pages\/[^/]+\/(\d+)/); if(m2) return {uid:m2[1],needLookup:false};
@@ -274,8 +238,6 @@ function extractUID(raw){
 
 async function startGetUID(){
   if(running) return;
-  const token=getToken();
-  if(!token){ alert('Vui lòng nhập Access Token!'); return; }
   const lines=parseLines(document.getElementById('linkInput').value);
   if(!lines.length){ alert('Nhập ít nhất 1 link!'); return; }
   running=true; uidResults=[];
@@ -290,15 +252,15 @@ async function startGetUID(){
   let done=0;
   for(const raw of lines){
     const parsed=extractUID(raw);
-    let uid=parsed.uid, name='';
+    let uid=parsed.uid;
     if(!uid&&parsed.needLookup){
       try{
-        const res=await fetch(`${API}/get-uid?username=${encodeURIComponent(parsed.username)}&token=${encodeURIComponent(token)}`);
+        const res=await fetch(`${API}/get-uid?username=${encodeURIComponent(parsed.username)}`);
         const d=await res.json();
-        uid=d.uid||null; name=d.name||'';
+        uid=d.uid||null;
       }catch(e){ uid=null; }
     }
-    const r={raw,uid:uid||null,name,error:!uid};
+    const r={raw,uid:uid||null,error:!uid};
     uidResults.push(r); updateURow(raw,r);
     done++;
     document.getElementById('upfill').style.width=(done/lines.length*100)+'%';
@@ -327,7 +289,7 @@ function updateURow(raw,r){
   const short=raw.length>40?raw.slice(0,40)+'…':raw;
   const lbl=`<span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${raw}">${short}</span>`;
   if(!r.uid) row.innerHTML=`${lbl}<span class="badge be">⚠ Không tìm thấy</span><span>—</span>`;
-  else row.innerHTML=`${lbl}<span class="badge bu"><span class="dot db"></span>${r.uid}${r.name?' · '+r.name:''}</span><button class="cbtn" onclick="navigator.clipboard.writeText('${r.uid}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>`;
+  else row.innerHTML=`${lbl}<span class="badge bu"><span class="dot db"></span>${r.uid}</span><button class="cbtn" onclick="navigator.clipboard.writeText('${r.uid}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>`;
 }
 
 function clearUID(){
@@ -340,7 +302,7 @@ function clearUID(){
 }
 
 function exportUIDCSV(){
-  const rows=[['Input','UID','Ten','Loi'],...uidResults.map(r=>['"'+r.raw+'"',r.uid||'','"'+(r.name||'')+'"',r.error?'Co':''])];
+  const rows=[['Input','UID','Loi'],...uidResults.map(r=>['"'+r.raw+'"',r.uid||'',r.error?'Co':''])];
   const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n')); a.download='fb_uid.csv'; a.click();
 }
 
