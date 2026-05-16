@@ -4,14 +4,35 @@ import re
 
 app = Flask(__name__, static_folder='.')
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept-Language": "vi-VN,vi;q=0.9",
+}
 
 def check_page_has_likes(uid):
     url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
     try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        has_likes = "friends_likes" in res.text or "lượt thích" in res.text
-        return {"uid": uid, "has_likes": has_likes}
+        res = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=True)
+        html = res.text
+
+        # Nếu bị redirect về login hoặc home → không có likes tab
+        if "login" in res.url or res.url.rstrip("/") == "https://www.facebook.com":
+            return {"uid": uid, "has_likes": False}
+
+        # Chỉ True khi có dấu hiệu CHẮC CHẮN
+        strong_patterns = [
+            r'lượt thích.*?trang',
+            r'people like this page',
+            r'"pagelikescount"',
+            r'"fan_count":\s*\d+',
+            r'tab=friends_likes',
+        ]
+        for p in strong_patterns:
+            if re.search(p, html, re.IGNORECASE):
+                return {"uid": uid, "has_likes": True}
+
+        return {"uid": uid, "has_likes": False}
+
     except Exception as e:
         return {"uid": uid, "error": str(e)}
 
@@ -19,12 +40,9 @@ def get_uid_from_username(username):
     url = f"https://www.facebook.com/{username}"
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
-        # Tìm UID trong HTML
         m = re.search(r'"userID":"(\d+)"', res.text)
         if m: return m.group(1)
         m = re.search(r'profile_id=(\d+)', res.text)
-        if m: return m.group(1)
-        m = re.search(r'"id":"(\d+)"', res.text)
         if m: return m.group(1)
         return None
     except:
