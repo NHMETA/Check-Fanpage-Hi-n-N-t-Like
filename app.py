@@ -15,23 +15,28 @@ def check_page_has_likes(uid):
         res = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=True)
         html = res.text
 
-        # Nếu bị redirect về login hoặc home → không có likes tab
-        if "login" in res.url or res.url.rstrip("/") == "https://www.facebook.com":
+        # Nếu bị redirect về login
+        if "login" in res.url:
             return {"uid": uid, "has_likes": False}
 
-        # Chỉ True khi có dấu hiệu CHẮC CHẮN
-        strong_patterns = [
-            r'lượt thích.*?trang',
-            r'people like this page',
-            r'"pagelikescount"',
-            r'"fan_count":\s*\d+',
-            r'tab=friends_likes',
-        ]
-        for p in strong_patterns:
-            if re.search(p, html, re.IGNORECASE):
-                return {"uid": uid, "has_likes": True}
+        # Debug: trả về 500 ký tự đầu để xem
+        # return {"uid": uid, "debug": html[:500]}
 
-        return {"uid": uid, "has_likes": False}
+        # Page có lượt thích: URL giữ nguyên sk=friends_likes và có nội dung likes
+        # Page không có: Facebook redirect hoặc không render tab likes
+
+        # Tìm pattern phân biệt 2 loại page
+        # Page 2 (có likes): có "friends_likes" trong phần selected/active tab
+        # Page 1 (không có): không có tab này
+
+        has_likes = bool(
+            re.search(r'"sk":"friends_likes"', html) or
+            re.search(r'selected.*?friends_likes|friends_likes.*?selected', html) or
+            re.search(r'"activeTab":"friends_likes"', html) or
+            re.search(r'lượt thích.*?\d', html, re.IGNORECASE)
+        )
+
+        return {"uid": uid, "has_likes": has_likes}
 
     except Exception as e:
         return {"uid": uid, "error": str(e)}
@@ -58,6 +63,20 @@ def check():
     if not uid:
         return jsonify({"error": "Thiếu uid"}), 400
     return jsonify(check_page_has_likes(uid))
+
+# Route debug: xem raw HTML Facebook trả về
+@app.route("/debug")
+def debug():
+    uid = request.args.get("uid", "")
+    if not uid:
+        return "Thêm ?uid=xxx", 400
+    url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=True)
+        # Trả về 2000 ký tự để tìm pattern
+        return f"URL: {res.url}\n\nHTML:\n{res.text[:2000]}", 200, {"Content-Type": "text/plain"}
+    except Exception as e:
+        return str(e), 500
 
 @app.route("/check-bulk", methods=["POST"])
 def check_bulk():
