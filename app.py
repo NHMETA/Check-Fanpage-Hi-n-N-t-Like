@@ -4,20 +4,31 @@ import re
 
 app = Flask(__name__, static_folder='.')
 
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def check_page_has_likes(uid):
-    url = f"https://graph.facebook.com/{uid}"
+    url = f"https://www.facebook.com/profile.php?id={uid}&sk=friends_likes"
     try:
-        res = requests.get(url, params={
-            "fields": "fan_count,name"
-        }, timeout=10)
-        data = res.json()
-        if "error" in data:
-            return {"uid": uid, "has_likes": False, "error": data["error"]["message"]}
-        fan_count = data.get("fan_count", 0)
-        return {"uid": uid, "has_likes": fan_count > 0, "fan_count": fan_count, "name": data.get("name", "")}
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        has_likes = "friends_likes" in res.text or "lượt thích" in res.text
+        return {"uid": uid, "has_likes": has_likes}
     except Exception as e:
         return {"uid": uid, "error": str(e)}
+
+def get_uid_from_username(username):
+    url = f"https://www.facebook.com/{username}"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        # Tìm UID trong HTML
+        m = re.search(r'"userID":"(\d+)"', res.text)
+        if m: return m.group(1)
+        m = re.search(r'profile_id=(\d+)', res.text)
+        if m: return m.group(1)
+        m = re.search(r'"id":"(\d+)"', res.text)
+        if m: return m.group(1)
+        return None
+    except:
+        return None
 
 @app.route("/")
 def index():
@@ -36,19 +47,15 @@ def check_bulk():
     results = [check_page_has_likes(uid) for uid in uids]
     return jsonify(results)
 
-@app.route("/get-uid", methods=["POST"])
+@app.route("/get-uid")
 def get_uid():
-    link = request.json.get("link", "")
-    uid = extract_uid_from_link(link)
+    username = request.args.get("username", "").strip()
+    if not username:
+        return jsonify({"error": "Thiếu username"}), 400
+    uid = get_uid_from_username(username)
     if uid:
-        return jsonify({"uid": uid})
-    return jsonify({"error": "Không tìm thấy UID"}), 400
-
-def extract_uid_from_link(link):
-    match = re.search(r'id=(\d+)', link)
-    if match:
-        return match.group(1)
-    return None
+        return jsonify({"username": username, "uid": uid})
+    return jsonify({"username": username, "uid": None, "error": "Không tìm thấy UID"})
 
 if __name__ == "__main__":
     app.run()
